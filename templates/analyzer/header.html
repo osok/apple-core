@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Header Analysis - Apple-Core{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Mach-O Header Analysis: {{ header_data.file.filename }}</h1>
+</div>
+
+{% for header_entry in header_data.headers %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            {% if header_entry.header.is_64_bit %}
+                64-bit
+            {% else %}
+                32-bit
+            {% endif %}
+            {% if header_entry.header.cpu_type == 0x01000007 or header_entry.header.cpu_type == 7 %}
+                Intel
+            {% elif header_entry.header.cpu_type == 0x0100000c or header_entry.header.cpu_type == 12 %}
+                ARM
+            {% else %}
+                Unknown ({{ header_entry.header.cpu_type|hex }})
+            {% endif %}
+            Mach-O Header
+        </h5>
+    </div>
+    <div class="card-body">
+        <h6 class="card-subtitle mb-3 text-muted">Magic: {{ header_entry.header.magic_number|hex }}</h6>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th>Magic Number</th>
+                                <td><code>0x{{ header_entry.header.magic_number|hex }}</code> 
+                                    ({% if header_entry.header.is_64_bit %}64-bit{% else %}32-bit{% endif %}, 
+                                    {% if header_entry.header.is_little_endian %}little-endian{% else %}big-endian{% endif %})
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>CPU Type</th>
+                                <td><code>0x{{ header_entry.header.cpu_type|hex }}</code>
+                                    {% if header_entry.header.cpu_type == 0x01000007 or header_entry.header.cpu_type == 7 %}
+                                        (Intel x86)
+                                    {% elif header_entry.header.cpu_type == 0x0100000c or header_entry.header.cpu_type == 12 %}
+                                        (ARM)
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>CPU Subtype</th>
+                                <td><code>0x{{ header_entry.header.cpu_subtype|hex }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>File Type</th>
+                                <td><code>0x{{ header_entry.header.file_type|hex }}</code>
+                                    {% if header_entry.header.file_type == 2 %}
+                                        (Executable)
+                                    {% elif header_entry.header.file_type == 6 %}
+                                        (Dynamic Library)
+                                    {% elif header_entry.header.file_type == 1 %}
+                                        (Object File)
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th>Number of Commands</th>
+                                <td>{{ header_entry.header.ncmds }}</td>
+                            </tr>
+                            <tr>
+                                <th>Size of Commands</th>
+                                <td>{{ header_entry.header.sizeofcmds }} bytes</td>
+                            </tr>
+                            <tr>
+                                <th>Flags</th>
+                                <td><code>0x{{ header_entry.header.flags|hex }}</code></td>
+                            </tr>
+                            {% if header_entry.header.is_64_bit %}
+                            <tr>
+                                <th>Reserved</th>
+                                <td><code>0x{{ header_entry.header.reserved|default(0)|hex }}</code></td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Load Commands Table -->
+        <h5 class="mt-4 mb-3">Load Commands ({{ header_entry.command_count }})</h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Command Type</th>
+                        <th>Size</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cmd in header_entry.load_commands %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><code>0x{{ cmd.type|hex }}</code></td>
+                        <td>{{ cmd.size }} bytes</td>
+                        <td>
+                            {% if cmd.type == 0x1 %}
+                                LC_SEGMENT (32-bit segment)
+                            {% elif cmd.type == 0x19 %}
+                                LC_SEGMENT_64 (64-bit segment)
+                            {% elif cmd.type == 0x2 %}
+                                LC_SYMTAB (Symbol table)
+                            {% elif cmd.type == 0xb %}
+                                LC_DYSYMTAB (Dynamic symbol table)
+                            {% elif cmd.type == 0xc %}
+                                LC_LOAD_DYLIB (Load dynamic library)
+                            {% elif cmd.type == 0x80000028 %}
+                                LC_MAIN (Entrypoint command)
+                            {% else %}
+                                Command {{ cmd.type|hex }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Flags interpretation -->
+        <h5 class="mt-4 mb-3">Flags Interpretation</h5>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            {% set flags = header_entry.header.flags %}
+                            
+                            {% if flags & 0x1 %}
+                            <li><span class="badge bg-success">MH_NOUNDEFS</span> No undefined references</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x2 %}
+                            <li><span class="badge bg-success">MH_INCRLINK</span> Incrementally linked</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x4 %}
+                            <li><span class="badge bg-warning">MH_DYLDLINK</span> Linked for dyld</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x8 %}
+                            <li><span class="badge bg-info">MH_BINDATLOAD</span> Binds to symbols at load time</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x10 %}
+                            <li><span class="badge bg-primary">MH_PREBOUND</span> Prebound for specific libraries</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x20 %}
+                            <li><span class="badge bg-dark">MH_SPLIT_SEGS</span> Split read-only and read-write segments</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x40 %}
+                            <li><span class="badge bg-secondary">MH_LAZY_INIT</span> Has lazy initialization</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x80 %}
+                            <li><span class="badge bg-info">MH_TWOLEVEL</span> Uses two-level namespace binding</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x100 %}
+                            <li><span class="badge bg-warning">MH_FORCE_FLAT</span> Forces flat namespace binding</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x200 %}
+                            <li><span class="badge bg-danger">MH_NOMULTIDEFS</span> No multiple definition warnings</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x400 %}
+                            <li><span class="badge bg-primary">MH_NOFIXPREBINDING</span> No fix prebinding</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x800 %}
+                            <li><span class="badge bg-secondary">MH_PREBINDABLE</span> Is prebindable</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x1000 %}
+                            <li><span class="badge bg-success">MH_ALLMODSBOUND</span> All modules bound</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x2000 %}
+                            <li><span class="badge bg-warning">MH_SUBSECTIONS_VIA_SYMBOLS</span> Has subsections via symbols</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x4000 %}
+                            <li><span class="badge bg-info">MH_CANONICAL</span> Is canonical</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x8000 %}
+                            <li><span class="badge bg-primary">MH_WEAK_DEFINES</span> Contains weak definitions</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x10000 %}
+                            <li><span class="badge bg-dark">MH_BINDS_TO_WEAK</span> Binds to weak symbols</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x20000 %}
+                            <li><span class="badge bg-danger">MH_ALLOW_STACK_EXECUTION</span> Allows stack execution</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %} 

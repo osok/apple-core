@@ -149,13 +149,13 @@ The application follows a layered architecture:
 ### Directory organization
 
 ```
-mach_o_analyzer/
+apple-core/
 ├── app.py               # Entry point
 ├── config.py            # Configuration
 ├── requirements.txt     # Dependencies
 ├── static/              # Frontend assets
 ├── templates/           # HTML templates
-└── macho/               # Main package
+└── core/                # Main package
     ├── __init__.py      # App factory
     ├── models/          # Database models
     ├── views/           # Flask routes
@@ -791,8 +791,6 @@ class HexViewer {
   }
 }
 ```
-
-
 
 ## Conclusion
 

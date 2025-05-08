@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Mach-O File - Apple-Core{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Edit Mach-O File: {{ file.filename }}</h1>
+</div>
+
+<!-- Warning Card -->
+<div class="alert alert-warning" role="alert">
+    <h4 class="alert-heading">Warning: Proceed with caution!</h4>
+    <p>Editing Mach-O files can cause them to become corrupt or unloadable if not done correctly. Always ensure you have a backup before making changes.</p>
+    <hr>
+    <p class="mb-0">All edits are tracked in the edit history and can be viewed below. Backups are automatically created before each edit operation.</p>
+</div>
+
+<!-- Edit Form -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Edit Mach-O File</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('analyzer.edit', file_id=file.id) }}">
+            <div class="mb-3">
+                <label for="target_type" class="form-label">Target Type</label>
+                <select class="form-select" id="target_type" name="target_type" required>
+                    <option value="">Select a target type...</option>
+                    <option value="header">Header Field</option>
+                    <option value="segment">Segment Field</option>
+                    <option value="section">Section Field</option>
+                    <option value="load_command">Load Command</option>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label for="target_id" class="form-label">Target ID</label>
+                <input type="number" class="form-control" id="target_id" name="target_id" required>
+                <div class="form-text">ID of the header, segment, section, or load command to edit.</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="new_value" class="form-label">New Value</label>
+                <textarea class="form-control" id="new_value" name="new_value" rows="3" required></textarea>
+                <div class="form-text">
+                    Enter the new value in hexadecimal for binary data or as appropriate for the field.
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Apply Edit</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit History -->
+<div class="card">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Edit History</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if edit_history %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Type</th>
+                        <th>Target</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for edit in edit_history %}
+                    <tr>
+                        <td>{{ edit.edit_timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>
+                            {% if edit.edit_type == 'modify' %}
+                                <span class="badge bg-primary">Modify</span>
+                            {% elif edit.edit_type == 'add' %}
+                                <span class="badge bg-success">Add</span>
+                            {% elif edit.edit_type == 'delete' %}
+                                <span class="badge bg-danger">Delete</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ edit.target_type }} #{{ edit.target_id }}
+                        </td>
+                        <td>
+                            {% if edit.status == 'pending' %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% elif edit.status == 'applied' %}
+                                <span class="badge bg-success">Applied</span>
+                            {% elif edit.status == 'reverted' %}
+                                <span class="badge bg-info">Reverted</span>
+                            {% elif edit.status == 'failed' %}
+                                <span class="badge bg-danger">Failed</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if edit.status == 'applied' %}
+                            <button class="btn btn-sm btn-outline-warning undo-edit" data-edit-id="{{ edit.id }}">Undo</button>
+                            {% endif %}
+                            <button class="btn btn-sm btn-outline-info view-edit" data-edit-id="{{ edit.id }}" data-bs-toggle="modal" data-bs-target="#editDetailsModal">View Details</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-3">
+            <p class="text-muted mb-0">No edit history found. Edits will be recorded here once you make changes.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Edit Details Modal -->
+<div class="modal fade" id="editDetailsModal" tabindex="-1" aria-labelledby="editDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editDetailsModalLabel">Edit Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Before</h6>
+                        <pre id="edit-before" class="bg-light p-2" style="max-height: 200px; overflow-y: auto;"></pre>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>After</h6>
+                        <pre id="edit-after" class="bg-light p-2" style="max-height: 200px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>Details</h6>
+                    <dl class="row">
+                        <dt class="col-sm-3">Edit ID</dt>
+                        <dd class="col-sm-9" id="edit-id"></dd>
+                        
+                        <dt class="col-sm-3">Timestamp</dt>
+                        <dd class="col-sm-9" id="edit-timestamp"></dd>
+                        
+                        <dt class="col-sm-3">Type</dt>
+                        <dd class="col-sm-9" id="edit-type"></dd>
+                        
+                        <dt class="col-sm-3">Target</dt>
+                        <dd class="col-sm-9" id="edit-target"></dd>
+                        
+                        <dt class="col-sm-3">Status</dt>
+                        <dd class="col-sm-9" id="edit-status"></dd>
+                    </dl>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle edit view buttons
+    const viewButtons = document.querySelectorAll('.view-edit');
+    
+    viewButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const editId = this.dataset.editId;
+            
+            // This would actually fetch edit details from the server
+            // For now, we'll just simulate with placeholder data
+            document.getElementById('edit-id').textContent = editId;
+            document.getElementById('edit-timestamp').textContent = '2023-04-01 12:34:56';
+            document.getElementById('edit-type').textContent = 'Modify';
+            document.getElementById('edit-target').textContent = 'Header #1';
+            document.getElementById('edit-status').textContent = 'Applied';
+            document.getElementById('edit-before').textContent = 'Old value here';
+            document.getElementById('edit-after').textContent = 'New value here';
+        });
+    });
+    
+    // Handle undo buttons
+    const undoButtons = document.querySelectorAll('.undo-edit');
+    
+    undoButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const editId = this.dataset.editId;
+            
+            if (confirm('Are you sure you want to undo this edit? This action cannot be reversed.')) {
+                // This would actually send a request to undo the edit
+                window.location.href = `/analyzer/edit/${editId}/undo`;
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

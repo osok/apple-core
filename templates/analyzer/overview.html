@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}File Overview - Apple-Core{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">File Overview: {{ file_data.file.filename }}</h1>
+</div>
+
+<div class="row">
+    <!-- File Information Card -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">File Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <th scope="row">Filename</th>
+                            <td>{{ file_data.file.filename }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">File Size</th>
+                            <td>{{ file_data.file.file_size }} bytes ({{ (file_data.file.file_size / 1024)|round(2) }} KB)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">MD5 Hash</th>
+                            <td><code>{{ file_data.file.md5_hash }}</code></td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Upload Date</th>
+                            <td>{{ file_data.file.creation_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Path</th>
+                            <td><small class="text-muted">{{ file_data.file.filepath }}</small></td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Architectures</th>
+                            <td>{{ file_data.header_count }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Header Summary Card -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Header Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Architecture</th>
+                                <th>Type</th>
+                                <th>Commands</th>
+                                <th>Flags</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for header in file_data.headers %}
+                            <tr>
+                                <td>
+                                    {% if header.is_64_bit %}
+                                        64-bit
+                                    {% else %}
+                                        32-bit
+                                    {% endif %}
+                                    {% if header.cpu_type == 0x01000007 or header.cpu_type == 7 %}
+                                        Intel
+                                    {% elif header.cpu_type == 0x0100000c or header.cpu_type == 12 %}
+                                        ARM
+                                    {% else %}
+                                        Unknown ({{ header.cpu_type|hex }})
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if header.file_type == 2 %}
+                                        Executable
+                                    {% elif header.file_type == 6 %}
+                                        Dynamic Library
+                                    {% elif header.file_type == 1 %}
+                                        Object File
+                                    {% else %}
+                                        Type {{ header.file_type }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ header.ncmds }}</td>
+                                <td><code>{{ header.flags|hex }}</code></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <a href="{{ url_for('analyzer.header', file_id=file_data.file.id) }}" class="btn btn-sm btn-outline-secondary mt-2">View Header Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Segments Card -->
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Segments ({{ file_data.segment_count }})</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>VM Address</th>
+                        <th>VM Size</th>
+                        <th>Permissions</th>
+                        <th>Sections</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for segment in file_data.segments %}
+                    <tr>
+                        <td><code>{{ segment.name }}</code></td>
+                        <td><code>0x{{ segment.address|hex }}</code></td>
+                        <td>{{ segment.size }} bytes</td>
+                        <td><code>{{ segment.protection }}</code></td>
+                        <td>{{ segment.section_count }}</td>
+                        <td>
+                            <a href="{{ url_for('analyzer.segments', file_id=file_data.file.id) }}#segment-{{ segment.id }}" class="btn btn-sm btn-outline-primary">Details</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer">
+        <a href="{{ url_for('analyzer.segments', file_id=file_data.file.id) }}" class="btn btn-sm btn-success">View All Segments</a>
+    </div>
+</div>
+
+<!-- Notes Card -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Notes</h5>
+    </div>
+    <div class="card-body">
+        {% if file_data.file.user_notes %}
+            <p>{{ file_data.file.user_notes|nl2br }}</p>
+        {% else %}
+            <p class="text-muted">No notes have been added for this file.</p>
+        {% endif %}
+        
+        <form method="post" action="{{ url_for('analyzer.add_notes', file_id=file_data.file.id) }}">
+            <div class="mb-3">
+                <label for="notes" class="form-label">Add/Edit Notes</label>
+                <textarea class="form-control" id="notes" name="notes" rows="3">{{ file_data.file.user_notes }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Notes</button>
+        </form>
+    </div>
+</div>
+{% endblock %} 

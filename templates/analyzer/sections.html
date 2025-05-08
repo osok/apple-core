@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Section Analysis - Apple-Core{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Sections in Segment: {{ section_data.segment.segname }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('analyzer.segments', file_id=file_id) }}" class="btn btn-sm btn-outline-secondary">Back to Segments</a>
+        </div>
+    </div>
+</div>
+
+<!-- Segment Information -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Segment Information</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th>Name</th>
+                                <td><code>{{ section_data.segment.segname }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>VM Address</th>
+                                <td><code>0x{{ section_data.segment.vmaddr|hex }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>VM Size</th>
+                                <td>{{ section_data.segment.vmsize }} bytes</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th>File Offset</th>
+                                <td><code>0x{{ section_data.segment.fileoff|hex }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>File Size</th>
+                                <td>{{ section_data.segment.filesize }} bytes</td>
+                            </tr>
+                            <tr>
+                                <th>Protection</th>
+                                <td><span class="badge bg-primary">{{ section_data.segment.protection_string }}</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sections Table -->
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Sections ({{ section_data.sections|length }})</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Address</th>
+                        <th>Size</th>
+                        <th>Offset</th>
+                        <th>Align</th>
+                        <th>Type</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for section in section_data.sections %}
+                    <tr>
+                        <td><code>{{ section.sectname }}</code></td>
+                        <td><code>0x{{ section.addr|hex }}</code></td>
+                        <td>{{ section.size }} bytes</td>
+                        <td><code>0x{{ section.offset|hex }}</code></td>
+                        <td>2^{{ section.align }}</td>
+                        <td>{{ section.type_string }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary view-section" data-bs-toggle="modal" data-bs-target="#sectionModal" data-section-id="{{ section.id }}" data-section-name="{{ section.sectname }}" data-section-offset="{{ section.offset }}" data-section-size="{{ section.size }}">View Content</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Flags Interpretation -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Section Flags</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Section</th>
+                        <th>Flags (Hex)</th>
+                        <th>Type</th>
+                        <th>Attributes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for section in section_data.sections %}
+                    <tr>
+                        <td><code>{{ section.sectname }}</code></td>
+                        <td><code>0x{{ section.flags|hex }}</code></td>
+                        <td>{{ section.type_string }}</td>
+                        <td>
+                            {% set flags = section.flags %}
+                            
+                            {% if flags & 0x00000800 %}
+                            <span class="badge bg-success">SOME_INSTRUCTIONS</span>
+                            {% endif %}
+                            
+                            {% if flags & 0x00000400 %}
+                            <span class="badge bg-danger">PURE_INSTRUCTIONS</span>
+                            {% endif %}
+                            
+                            {% if flags & 0x00000200 %}
+                            <span class="badge bg-warning">NO_DEAD_STRIP</span>
+                            {% endif %}
+                            
+                            {% if flags & 0x00000100 %}
+                            <span class="badge bg-info">STRIP_STATIC_SYMS</span>
+                            {% endif %}
+                            
+                            {% if flags & 0x00000080 %}
+                            <span class="badge bg-primary">LIVE_SUPPORT</span>
+                            {% endif %}
+                            
+                            {% if flags & 0x10000000 %}
+                            <span class="badge bg-secondary">SELF_MODIFYING_CODE</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Section Content Modal -->
+<div class="modal fade" id="sectionModal" tabindex="-1" aria-labelledby="sectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sectionModalLabel">Section Content</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <!-- Hex viewer -->
+                        <div id="hex-viewer" class="hex-viewer" data-file-id="{{ file_id }}">
+                            <div class="hex-controls mb-2">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="btn-group">
+                                            <button id="prev-page" class="btn btn-sm btn-outline-secondary">◀ Previous</button>
+                                            <button id="next-page" class="btn btn-sm btn-outline-secondary">Next ▶</button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <form id="jump-to-offset" class="d-flex">
+                                            <input type="text" id="offset-input" class="form-control form-control-sm me-2" placeholder="Offset (hex)">
+                                            <button type="submit" class="btn btn-sm btn-primary">Jump</button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <span>Current offset: <code id="current-offset">0x00000000</code></span>
+                                </div>
+                            </div>
+                            <div id="hex-content" class="hex-content"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <!-- Interpretation panel -->
+                        <div id="interpretation-panel" class="interpretation-panel"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle section view buttons
+    const viewButtons = document.querySelectorAll('.view-section');
+    
+    viewButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const sectionId = this.dataset.sectionId;
+            const sectionName = this.dataset.sectionName;
+            const sectionOffset = parseInt(this.dataset.sectionOffset);
+            const sectionSize = parseInt(this.dataset.sectionSize);
+            
+            // Update modal title
+            document.getElementById('sectionModalLabel').textContent = `Section Content: ${sectionName}`;
+            
+            // Load hex data
+            loadHexData({{ file_id }}, sectionOffset, Math.min(256, sectionSize));
+        });
+    });
+});
+</script>
+{% endblock %} 

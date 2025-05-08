@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Segments Analysis - Apple-Core{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Segments Analysis: {{ segment_data.file.filename }}</h1>
+</div>
+
+<!-- Segments List -->
+<div class="accordion mb-4" id="segmentsAccordion">
+    {% for segment_entry in segment_data.segments %}
+    <div class="accordion-item" id="segment-{{ segment_entry.segment.id }}">
+        <h2 class="accordion-header" id="heading-{{ segment_entry.segment.id }}">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ segment_entry.segment.id }}" aria-expanded="true" aria-controls="collapse-{{ segment_entry.segment.id }}">
+                <span class="badge badge-segment me-2">{{ segment_entry.segment.segname }}</span>
+                0x{{ segment_entry.segment.vmaddr|hex }}
+                <small class="ms-2 text-muted">({{ segment_entry.segment.vmsize }} bytes, {{ segment_entry.section_count }} sections)</small>
+            </button>
+        </h2>
+        <div id="collapse-{{ segment_entry.segment.id }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ segment_entry.segment.id }}" data-bs-parent="#segmentsAccordion">
+            <div class="accordion-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <th>Name</th>
+                                        <td><code>{{ segment_entry.segment.segname }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>VM Address</th>
+                                        <td><code>0x{{ segment_entry.segment.vmaddr|hex }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>VM Size</th>
+                                        <td>{{ segment_entry.segment.vmsize }} bytes</td>
+                                    </tr>
+                                    <tr>
+                                        <th>File Offset</th>
+                                        <td><code>0x{{ segment_entry.segment.fileoff|hex }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>File Size</th>
+                                        <td>{{ segment_entry.segment.filesize }} bytes</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <th>Max Protection</th>
+                                        <td>
+                                            <code>0x{{ segment_entry.segment.maxprot|hex }}</code>
+                                            <span class="ms-2 badge bg-secondary">
+                                                {% set prot = segment_entry.segment.maxprot %}
+                                                {% if prot & 0x01 %}r{% else %}-{% endif %}{% if prot & 0x02 %}w{% else %}-{% endif %}{% if prot & 0x04 %}x{% else %}-{% endif %}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Initial Protection</th>
+                                        <td>
+                                            <code>0x{{ segment_entry.segment.initprot|hex }}</code>
+                                            <span class="ms-2 badge bg-primary">{{ segment_entry.segment.protection_string }}</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Number of Sections</th>
+                                        <td>{{ segment_entry.segment.nsects }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Flags</th>
+                                        <td><code>0x{{ segment_entry.segment.flags|hex }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Actions</th>
+                                        <td>
+                                            <a href="{{ url_for('analyzer.sections', file_id=segment_data.file.id, segment_id=segment_entry.segment.id) }}" class="btn btn-sm btn-outline-primary">View Sections</a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Segment flags interpretation -->
+                <div class="card mt-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Segment Flags</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            {% set flags = segment_entry.segment.flags %}
+                            
+                            {% if flags & 0x1 %}
+                            <li><span class="badge bg-info">SG_HIGHVM</span> High VM address</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x2 %}
+                            <li><span class="badge bg-warning">SG_FVMLIB</span> Fixed VM library segment</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x4 %}
+                            <li><span class="badge bg-success">SG_NORELOC</span> No relocation information</li>
+                            {% endif %}
+                            
+                            {% if flags & 0x8 %}
+                            <li><span class="badge bg-danger">SG_PROTECTED_VERSION_1</span> Protected segment</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Segment memory map visualization -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Memory Map Visualization</h5>
+    </div>
+    <div class="card-body">
+        <div id="memory-map" style="height: 400px;"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Display memory map visualization using D3.js
+    const memoryMap = document.getElementById('memory-map');
+    if (!memoryMap) return;
+    
+    // Sample data (would be replaced with real data)
+    const segments = [
+        {% for segment_entry in segment_data.segments %}
+        {
+            name: "{{ segment_entry.segment.segname }}",
+            vmaddr: {{ segment_entry.segment.vmaddr }},
+            vmsize: {{ segment_entry.segment.vmsize }},
+            permissions: "{{ segment_entry.segment.protection_string }}",
+            sections: {{ segment_entry.section_count }}
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    // D3.js memory map visualization
+    if (segments.length > 0) {
+        // Sort segments by address
+        segments.sort((a, b) => a.vmaddr - b.vmaddr);
+        
+        // Find min and max addresses
+        const minAddr = Math.min(...segments.map(s => s.vmaddr));
+        const maxAddr = Math.max(...segments.map(s => s.vmaddr + s.vmsize));
+        
+        // Set up SVG
+        const margin = {top: 30, right: 30, bottom: 50, left: 100};
+        const width = memoryMap.clientWidth - margin.left - margin.right;
+        const height = 350 - margin.top - margin.bottom;
+        
+        const svg = d3.select("#memory-map")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+        
+        // X scale for addresses
+        const x = d3.scaleLinear()
+            .domain([minAddr, maxAddr])
+            .range([0, width]);
+        
+        // Y scale for segments
+        const y = d3.scaleBand()
+            .domain(segments.map(d => d.name))
+            .range([0, height])
+            .padding(0.1);
+        
+        // Draw X axis
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x).tickFormat(d => '0x' + d.toString(16)))
+            .selectAll("text")
+            .style("text-anchor", "end")
+            .attr("dx", "-.8em")
+            .attr("dy", ".15em")
+            .attr("transform", "rotate(-45)");
+        
+        // Draw Y axis
+        svg.append("g")
+            .call(d3.axisLeft(y));
+        
+        // Color scale based on permissions
+        const colorScale = d3.scaleOrdinal()
+            .domain(['r--', 'rw-', 'r-x', 'rwx'])
+            .range(['#4daf4a', '#377eb8', '#ff7f00', '#e41a1c']);
+        
+        // Draw segments
+        svg.selectAll("rect")
+            .data(segments)
+            .join("rect")
+            .attr("x", d => x(d.vmaddr))
+            .attr("y", d => y(d.name))
+            .attr("width", d => Math.max(1, x(d.vmaddr + d.vmsize) - x(d.vmaddr)))
+            .attr("height", y.bandwidth())
+            .attr("fill", d => colorScale(d.permissions))
+            .attr("stroke", "black")
+            .attr("stroke-width", 1)
+            .on("mouseover", function(event, d) {
+                d3.select(this).attr("stroke-width", 2);
+                
+                // Show tooltip
+                svg.append("text")
+                    .attr("class", "tooltip")
+                    .attr("x", x(d.vmaddr + d.vmsize / 2))
+                    .attr("y", y(d.name) - 5)
+                    .attr("text-anchor", "middle")
+                    .text(`${d.name}: 0x${d.vmaddr.toString(16)} (${d.vmsize} bytes, ${d.sections} sections)`);
+            })
+            .on("mouseout", function() {
+                d3.select(this).attr("stroke-width", 1);
+                svg.selectAll(".tooltip").remove();
+            });
+        
+        // Add X axis label
+        svg.append("text")
+            .attr("text-anchor", "middle")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 5)
+            .text("Virtual Memory Address");
+        
+        // Add legend
+        const legend = svg.append("g")
+            .attr("transform", `translate(${width - 120}, -20)`);
+        
+        const permissions = ['r--', 'rw-', 'r-x', 'rwx'];
+        
+        legend.selectAll("rect")
+            .data(permissions)
+            .join("rect")
+            .attr("x", 0)
+            .attr("y", (d, i) => i * 20)
+            .attr("width", 15)
+            .attr("height", 15)
+            .attr("fill", d => colorScale(d));
+        
+        legend.selectAll("text")
+            .data(permissions)
+            .join("text")
+            .attr("x", 20)
+            .attr("y", (d, i) => i * 20 + 12)
+            .text(d => d);
+    }
+});
+</script>
+{% endblock %} 

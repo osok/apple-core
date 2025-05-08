@@ -1,0 +1,159 @@
+/* 
+ * Apple-Core Mach-O Analyzer
+ * Custom CSS Styles
+ */
+
+/* Sidebar styles */
+.sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    padding: 48px 0 0;
+    box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+}
+
+.sidebar-sticky {
+    position: relative;
+    top: 0;
+    height: calc(100vh - 48px);
+    padding-top: .5rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* Hex viewer styles */
+.hex-viewer {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.offset-col {
+    color: #6c757d;
+    font-weight: bold;
+    margin-right: 1rem;
+}
+
+.hex-col {
+    color: #212529;
+    margin-right: 1rem;
+}
+
+.ascii-col {
+    color: #495057;
+}
+
+/* Interpretation panel */
+.interpretation-panel {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 1rem;
+}
+
+.interpretation-item {
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    border-left: 3px solid #6c757d;
+    background-color: #fff;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.interpretation-item:hover {
+    border-left-color: #007bff;
+    background-color: #f1f8ff;
+}
+
+.item-name {
+    font-weight: bold;
+    color: #495057;
+}
+
+.item-value {
+    font-family: 'Courier New', Courier, monospace;
+    color: #212529;
+}
+
+.item-description {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+/* Navigation tree */
+.nav-tree {
+    list-style: none;
+    padding-left: 0;
+}
+
+.nav-tree ul {
+    list-style: none;
+    padding-left: 1.25rem;
+}
+
+.nav-tree-item {
+    padding: 0.25rem 0;
+}
+
+.nav-tree-toggle {
+    cursor: pointer;
+    user-select: none;
+}
+
+.nav-tree-toggle::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 0.5rem;
+    transition: transform 0.2s ease;
+}
+
+.nav-tree-toggle.expanded::before {
+    transform: rotate(90deg);
+}
+
+/* Custom badges for different section types */
+.badge-segment {
+    background-color: #6f42c1;
+    color: white;
+}
+
+.badge-section {
+    background-color: #fd7e14;
+    color: white;
+}
+
+.badge-header {
+    background-color: #20c997;
+    color: white;
+}
+
+.badge-command {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* CodeMirror customizations */
+.CodeMirror {
+    height: auto;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+}
+
+.cm-header-highlight {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.cm-segment-highlight {
+    background-color: rgba(111, 66, 193, 0.1);
+}
+
+.cm-section-highlight {
+    background-color: rgba(253, 126, 20, 0.1);
+} 

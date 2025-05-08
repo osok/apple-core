@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Apple-Core Mach-O Analyzer{% endblock %}
+
+{% block fullwidth_content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card mt-4">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0">Apple-Core Mach-O Analyzer</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="card-title">Upload a Mach-O File</h5>
+                        <p class="card-text">Upload a Mach-O binary file for analysis. Supports executables, dynamic libraries, object files, and more.</p>
+                        
+                        <form action="{{ url_for('main.upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Select file</label>
+                                <input type="file" class="form-control" id="file" name="file" required>
+                                <div class="form-text">Max file size: 50MB</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Upload & Analyze</button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="card-title">About Apple-Core</h5>
+                        <p class="card-text">
+                            Apple-Core is a comprehensive web-based tool for analyzing and modifying Mach-O binaries, the file format used by macOS and iOS applications.
+                        </p>
+                        <p class="card-text">
+                            Features:
+                        </p>
+                        <ul>
+                            <li>Detailed header analysis</li>
+                            <li>Segment and section exploration</li>
+                            <li>Load command parsing</li>
+                            <li>Binary editing capabilities</li>
+                            <li>Visual structure representation</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Files List -->
+        {% if files %}
+        <div class="card mt-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Recent Files</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Size</th>
+                                <th>Upload Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in files %}
+                            <tr>
+                                <td>{{ file.filename }}</td>
+                                <td>{{ (file.file_size / 1024)|round(1) }} KB</td>
+                                <td>{{ file.creation_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <a href="{{ url_for('analyzer.overview', file_id=file.id) }}" class="btn btn-sm btn-primary">Analyze</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

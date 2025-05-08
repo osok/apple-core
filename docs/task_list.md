@@ -12,16 +12,16 @@ This document tracks all development tasks for the Apple-Core Mach-O analyzer pr
 | ID | Task Description | Dependencies | Status | Reference |
 |----|-----------------|--------------|--------|-----------|
 | **S1** | **Project Setup** | | | |
-| S1.1 | Set up project structure and directory organization | - | Pending | Design.md: Directory organization |
-| S1.2 | Create basic Flask application skeleton | - | Pending | Design.md: Application architecture |
-| S1.3 | Set up SQLite database and schema | - | Pending | Design.md: Database design |
-| S1.4 | Configure development environment | - | Pending | - |
-| S1.5 | Create requirements.txt with project dependencies | - | Pending | Design.md: Application architecture |
-| TS1.1 | Write tests for application initialization | S1.2 | Pending | - |
-| TS1.2 | Write tests for database schema validation | S1.3 | Pending | - |
-| C1 | **Checkpoint: Project Foundation** | S1.1, S1.2, S1.3, S1.4, S1.5, TS1.1, TS1.2 | Pending | - |
+| S1.1 | Set up project structure and directory organization | - | Complete | Design.md: Directory organization |
+| S1.2 | Create basic Flask application skeleton | - | Complete | Design.md: Application architecture |
+| S1.3 | Set up SQLite database and schema | - | Complete | Design.md: Database design |
+| S1.4 | Configure development environment | - | Complete | - |
+| S1.5 | Create requirements.txt with project dependencies | - | Complete | Design.md: Application architecture |
+| TS1.1 | Write tests for application initialization | S1.2 | Complete | tests/test_app_init.py |
+| TS1.2 | Write tests for database schema validation | S1.3 | Complete | tests/test_db_schema.py |
+| C1 | **Checkpoint: Project Foundation** | S1.1, S1.2, S1.3, S1.4, S1.5, TS1.1, TS1.2 | Complete | - |
 | **P1** | **Mach-O Parser Core** | | | |
-| P1.1 | Implement Mach-O header parser (32-bit and 64-bit formats) | C1 | Pending | Design.md: Header structures |
+| P1.1 | Implement Mach-O header parser (32-bit and 64-bit formats) | C1 | In Progress | Design.md: Header structures |
 | P1.2 | Implement load commands parser | C1 | Pending | Design.md: Load commands |
 | P1.3 | Implement segments and sections parser | C1 | Pending | Design.md: Segments and sections |
 | P1.4 | Implement fat/universal binary support | C1 | Pending | Design.md: Core structure |
