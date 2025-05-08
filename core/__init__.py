@@ -16,6 +16,11 @@ migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
 
+@login_manager.user_loader
+def load_user(user_id):
+    # Since we don't have user authentication, return None
+    return None
+
 def create_app(config_name=None):
     """
     Application factory function that creates and configures the Flask app.

@@ -2,7 +2,7 @@
 EditHistory model for tracking file edit operations.
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 from core import db
 
 class EditHistory(db.Model):
@@ -13,7 +13,7 @@ class EditHistory(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=False)
-    edit_timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    edit_timestamp = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     edit_type = db.Column(db.String(20), nullable=False)  # 'modify', 'add', 'delete'
     target_type = db.Column(db.String(50), nullable=False)  # 'header', 'section', 'segment', etc.
     target_id = db.Column(db.Integer, nullable=False)

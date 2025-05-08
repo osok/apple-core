@@ -2,7 +2,7 @@
 MachoFile model for storing file metadata.
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 from core import db
 
 class MachoFile(db.Model):
@@ -15,7 +15,7 @@ class MachoFile(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     filepath = db.Column(db.String(512), nullable=False)
     file_size = db.Column(db.Integer, nullable=False)
-    creation_date = db.Column(db.DateTime, default=datetime.utcnow)
+    creation_date = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     md5_hash = db.Column(db.String(32), nullable=False)
     user_notes = db.Column(db.Text)
     
