@@ -6,6 +6,7 @@ import os
 import struct
 import pickle
 from typing import BinaryIO, Dict, Any, Tuple, Optional, List
+from io import BytesIO
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -14,7 +15,7 @@ from core.utils import (
     Endianness, detect_endianness, is_64_bit,
     read_uint32, read_uint64, read_format
 )
-from core.models import MachoFile, Header, LoadCommand
+from core.models import MachoFile, Header, LoadCommand, Segment, Section
 
 
 # Magic numbers for Mach-O headers
@@ -76,6 +77,35 @@ class ParsedLoadCommand:
     cmd_size: int
     cmd_offset: int
     cmd_data: bytes
+
+
+@dataclass
+class ParsedSegment:
+    """Data class for parsed Mach-O segment information."""
+    segname: str
+    vmaddr: int
+    vmsize: int
+    fileoff: int
+    filesize: int
+    maxprot: int
+    initprot: int
+    nsects: int
+    flags: int
+    cmd_offset: int
+    is_64_bit: bool = False
+    sections: List = None
+
+
+@dataclass
+class ParsedSection:
+    """Data class for parsed Mach-O section information."""
+    sectname: str
+    segname: str
+    addr: int
+    size: int
+    offset: int
+    align: int
+    flags: int
 
 
 class MachoParser:
@@ -141,6 +171,44 @@ class MachoParser:
                     cmd_data=cmd.cmd_data
                 )
                 db.session.add(load_cmd)
+            
+            db.session.commit()
+            
+            # Parse segments and sections
+            segments = MachoParser.parse_segments_and_sections(f, header_data, load_commands)
+            
+            # Store segments and sections in the database
+            for segment in segments:
+                # Create segment record
+                seg_record = Segment(
+                    file_id=macho_file.id,
+                    segname=segment.segname,
+                    vmaddr=segment.vmaddr,
+                    vmsize=segment.vmsize,
+                    fileoff=segment.fileoff,
+                    filesize=segment.filesize,
+                    maxprot=segment.maxprot,
+                    initprot=segment.initprot,
+                    nsects=segment.nsects,
+                    flags=segment.flags
+                )
+                db.session.add(seg_record)
+                db.session.flush()  # Get ID for relationships
+                
+                # Create section records if they exist
+                if segment.sections:
+                    for section in segment.sections:
+                        sect_record = Section(
+                            segment_id=seg_record.id,
+                            sectname=section.sectname,
+                            segname=section.segname,
+                            addr=section.addr,
+                            size=section.size,
+                            offset=section.offset,
+                            align=section.align,
+                            flags=section.flags
+                        )
+                        db.session.add(sect_record)
             
             db.session.commit()
             
@@ -305,4 +373,169 @@ class MachoParser:
             LC_FUNCTION_STARTS: "LC_FUNCTION_STARTS",
             LC_DATA_IN_CODE: "LC_DATA_IN_CODE",
         }
-        return cmd_types.get(cmd_type, f"Unknown command (0x{cmd_type:x})") 
+        return cmd_types.get(cmd_type, f"Unknown command (0x{cmd_type:x})")
+    
+    @staticmethod
+    def parse_segments_and_sections(file: BinaryIO, header: ParsedHeader, load_commands: List[ParsedLoadCommand]) -> List[ParsedSegment]:
+        """
+        Parse segments and sections from load commands.
+        
+        Args:
+            file: Binary file object
+            header: Parsed header information
+            load_commands: List of parsed load commands
+            
+        Returns:
+            List[ParsedSegment]: List of parsed segments with their sections
+        """
+        segments = []
+        endianness = header.endianness
+        is_64_bit = header.is_64_bit
+        
+        # Look for segment commands (LC_SEGMENT or LC_SEGMENT_64)
+        for cmd in load_commands:
+            if cmd.cmd_type == LC_SEGMENT or cmd.cmd_type == LC_SEGMENT_64:
+                # Process segment based on 32-bit or 64-bit format
+                segment = MachoParser._parse_segment_command(cmd, endianness, is_64_bit)
+                
+                # If the segment has sections, parse them
+                if segment.nsects > 0:
+                    segment.sections = MachoParser._parse_sections(cmd, segment, endianness, is_64_bit)
+                else:
+                    segment.sections = []
+                
+                segments.append(segment)
+        
+        return segments
+    
+    @staticmethod
+    def _parse_segment_command(cmd: ParsedLoadCommand, endianness: Endianness, is_64_bit: bool) -> ParsedSegment:
+        """
+        Parse a segment command (LC_SEGMENT or LC_SEGMENT_64).
+        
+        Args:
+            cmd: Load command data
+            endianness: File endianness
+            is_64_bit: Whether this is a 64-bit segment
+            
+        Returns:
+            ParsedSegment: Parsed segment information
+        """
+        # Create a BytesIO object from the command data
+        cmd_io = BytesIO(cmd.cmd_data)
+        
+        # Skip the command type and size (already read)
+        cmd_io.seek(8)
+        
+        # Read segment name (16 bytes for both 32-bit and 64-bit)
+        segname_bytes = cmd_io.read(16)
+        segname = segname_bytes.decode('utf-8').rstrip('\0')
+        
+        # Read the rest of the segment command based on format
+        if is_64_bit:
+            # 64-bit segment
+            vmaddr = read_uint64(cmd_io, endianness)
+            vmsize = read_uint64(cmd_io, endianness)
+            fileoff = read_uint64(cmd_io, endianness)
+            filesize = read_uint64(cmd_io, endianness)
+        else:
+            # 32-bit segment
+            vmaddr = read_uint32(cmd_io, endianness)
+            vmsize = read_uint32(cmd_io, endianness)
+            fileoff = read_uint32(cmd_io, endianness)
+            filesize = read_uint32(cmd_io, endianness)
+        
+        # Read protection and section count (same for 32-bit and 64-bit)
+        maxprot = read_uint32(cmd_io, endianness)
+        initprot = read_uint32(cmd_io, endianness)
+        nsects = read_uint32(cmd_io, endianness)
+        flags = read_uint32(cmd_io, endianness)
+        
+        return ParsedSegment(
+            segname=segname,
+            vmaddr=vmaddr,
+            vmsize=vmsize,
+            fileoff=fileoff,
+            filesize=filesize,
+            maxprot=maxprot,
+            initprot=initprot,
+            nsects=nsects,
+            flags=flags,
+            cmd_offset=cmd.cmd_offset,
+            is_64_bit=is_64_bit,
+            sections=None
+        )
+    
+    @staticmethod
+    def _parse_sections(cmd: ParsedLoadCommand, segment: ParsedSegment, endianness: Endianness, is_64_bit: bool) -> List[ParsedSection]:
+        """
+        Parse sections from a segment command.
+        
+        Args:
+            cmd: Load command data
+            segment: Parent segment information
+            endianness: File endianness
+            is_64_bit: Whether this is a 64-bit segment
+            
+        Returns:
+            List[ParsedSection]: List of parsed sections
+        """
+        sections = []
+        cmd_io = BytesIO(cmd.cmd_data)
+        
+        # Calculate offset to first section
+        # For 32-bit: command header (8) + segname (16) + 4 uint32s (vmaddr, vmsize, fileoff, filesize) + 4 more uint32s = 56
+        # For 64-bit: command header (8) + segname (16) + 4 uint64s (vmaddr, vmsize, fileoff, filesize) + 4 uint32s = 72
+        section_offset = 56 if not is_64_bit else 72
+        cmd_io.seek(section_offset)
+        
+        # Section size
+        # For 32-bit: 2 names (32) + 7 uint32s = 60
+        # For 64-bit: 2 names (32) + 2 uint64s + 5 uint32s = 68
+        section_size = 60 if not is_64_bit else 68
+        
+        # Parse each section
+        for i in range(segment.nsects):
+            # Read section name and segment name (same for 32-bit and 64-bit)
+            sectname_bytes = cmd_io.read(16)
+            segname_bytes = cmd_io.read(16)
+            sectname = sectname_bytes.decode('utf-8').rstrip('\0')
+            segname = segname_bytes.decode('utf-8').rstrip('\0')
+            
+            # Read address and size
+            if is_64_bit:
+                # 64-bit section
+                addr = read_uint64(cmd_io, endianness)
+                size = read_uint64(cmd_io, endianness)
+            else:
+                # 32-bit section
+                addr = read_uint32(cmd_io, endianness)
+                size = read_uint32(cmd_io, endianness)
+            
+            # Read remaining fields (same for 32-bit and 64-bit)
+            offset = read_uint32(cmd_io, endianness)
+            align = read_uint32(cmd_io, endianness)
+            reloff = read_uint32(cmd_io, endianness)  # Not stored in our model but must read
+            nreloc = read_uint32(cmd_io, endianness)  # Not stored in our model but must read
+            flags = read_uint32(cmd_io, endianness)
+            
+            # Skip the reserved fields (different size based on architecture)
+            if is_64_bit:
+                cmd_io.read(12)  # reserved1, reserved2, reserved3 (3 uint32s)
+            else:
+                cmd_io.read(8)   # reserved1, reserved2 (2 uint32s)
+            
+            # Create section object
+            section = ParsedSection(
+                sectname=sectname,
+                segname=segname,
+                addr=addr,
+                size=size,
+                offset=offset,
+                align=align,
+                flags=flags
+            )
+            
+            sections.append(section)
+        
+        return sections 
