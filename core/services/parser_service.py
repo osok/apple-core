@@ -4,7 +4,8 @@ Parser services for Mach-O file analysis.
 
 import os
 import struct
-from typing import BinaryIO, Dict, Any, Tuple, Optional
+import pickle
+from typing import BinaryIO, Dict, Any, Tuple, Optional, List
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -13,7 +14,7 @@ from core.utils import (
     Endianness, detect_endianness, is_64_bit,
     read_uint32, read_uint64, read_format
 )
-from core.models import MachoFile, Header
+from core.models import MachoFile, Header, LoadCommand
 
 
 # Magic numbers for Mach-O headers
@@ -36,6 +37,22 @@ MH_BUNDLE = 8        # Bundle
 MH_DYLINKER = 10     # Dynamic linker
 MH_DSYM = 10         # Debug symbols file
 
+# Load command types
+LC_SEGMENT = 0x1             # 32-bit segment
+LC_SYMTAB = 0x2              # Symbol table
+LC_THREAD = 0x4              # Thread state
+LC_UNIXTHREAD = 0x5          # Unix thread state
+LC_DYSYMTAB = 0xB            # Dynamic symbol table
+LC_LOAD_DYLIB = 0xC          # Load dynamic library
+LC_ID_DYLIB = 0xD            # Dynamic library identification
+LC_LOAD_DYLINKER = 0xE       # Load dynamic linker
+LC_SEGMENT_64 = 0x19         # 64-bit segment
+LC_UUID = 0x1B               # UUID
+LC_CODE_SIGNATURE = 0x1D     # Code signature
+LC_MAIN = 0x80000028         # Executable's main function
+LC_FUNCTION_STARTS = 0x26    # Function start addresses
+LC_DATA_IN_CODE = 0x29       # Data in code markers
+
 
 @dataclass
 class ParsedHeader:
@@ -50,6 +67,15 @@ class ParsedHeader:
     reserved: Optional[int] = None  # Only for 64-bit
     is_64_bit: bool = False
     endianness: Endianness = Endianness.LITTLE
+
+
+@dataclass
+class ParsedLoadCommand:
+    """Data class for parsed Mach-O load command information."""
+    cmd_type: int
+    cmd_size: int
+    cmd_offset: int
+    cmd_data: bytes
 
 
 class MachoParser:
@@ -100,6 +126,22 @@ class MachoParser:
             
             db.session.add(macho_file)
             db.session.add(header)
+            db.session.commit()
+            
+            # Parse load commands
+            load_commands = MachoParser.parse_load_commands(f, header_data)
+            
+            # Store load commands in the database
+            for cmd in load_commands:
+                load_cmd = LoadCommand(
+                    header_id=header.id,
+                    cmd_type=cmd.cmd_type,
+                    cmd_size=cmd.cmd_size,
+                    cmd_offset=cmd.cmd_offset,
+                    cmd_data=cmd.cmd_data
+                )
+                db.session.add(load_cmd)
+            
             db.session.commit()
             
             return macho_file
@@ -165,6 +207,56 @@ class MachoParser:
         return header
     
     @staticmethod
+    def parse_load_commands(file: BinaryIO, header: ParsedHeader) -> List[ParsedLoadCommand]:
+        """
+        Parse all load commands from a Mach-O file.
+        
+        Args:
+            file: Binary file object positioned after the header
+            header: Parsed header information
+            
+        Returns:
+            List[ParsedLoadCommand]: List of parsed load commands
+        """
+        load_commands = []
+        endianness = header.endianness
+        
+        # Calculate the start position of load commands
+        # For 32-bit Mach-O, this is after the 7 uint32 values (28 bytes)
+        # For 64-bit Mach-O, this is after the 7 uint32 values + reserved field (32 bytes)
+        start_offset = 28 if not header.is_64_bit else 32
+        
+        # Make sure we're at the correct position
+        file.seek(start_offset)
+        
+        # Parse each load command
+        for i in range(header.ncmds):
+            # Remember command offset
+            cmd_offset = file.tell()
+            
+            # Read command type and size
+            cmd_type = read_uint32(file, endianness)
+            cmd_size = read_uint32(file, endianness)
+            
+            # Go back to start of this command
+            file.seek(cmd_offset)
+            
+            # Read the entire command data
+            cmd_data = file.read(cmd_size)
+            
+            # Create a ParsedLoadCommand object
+            load_cmd = ParsedLoadCommand(
+                cmd_type=cmd_type,
+                cmd_size=cmd_size,
+                cmd_offset=cmd_offset,
+                cmd_data=cmd_data
+            )
+            
+            load_commands.append(load_cmd)
+        
+        return load_commands
+    
+    @staticmethod
     def _calculate_hash(filepath: str) -> str:
         """Calculate the MD5 hash of a file."""
         from core.utils import get_file_hash
@@ -192,4 +284,25 @@ class MachoParser:
             MH_DYLINKER: "Dynamic linker",
             MH_DSYM: "Debug symbols",
         }
-        return file_types.get(file_type, f"Unknown ({file_type})") 
+        return file_types.get(file_type, f"Unknown ({file_type})")
+    
+    @staticmethod
+    def get_load_command_name(cmd_type: int) -> str:
+        """Convert load command type constant to human-readable name."""
+        cmd_types = {
+            LC_SEGMENT: "LC_SEGMENT",
+            LC_SYMTAB: "LC_SYMTAB",
+            LC_THREAD: "LC_THREAD",
+            LC_UNIXTHREAD: "LC_UNIXTHREAD",
+            LC_DYSYMTAB: "LC_DYSYMTAB",
+            LC_LOAD_DYLIB: "LC_LOAD_DYLIB",
+            LC_ID_DYLIB: "LC_ID_DYLIB",
+            LC_LOAD_DYLINKER: "LC_LOAD_DYLINKER",
+            LC_SEGMENT_64: "LC_SEGMENT_64",
+            LC_UUID: "LC_UUID",
+            LC_CODE_SIGNATURE: "LC_CODE_SIGNATURE",
+            LC_MAIN: "LC_MAIN",
+            LC_FUNCTION_STARTS: "LC_FUNCTION_STARTS",
+            LC_DATA_IN_CODE: "LC_DATA_IN_CODE",
+        }
+        return cmd_types.get(cmd_type, f"Unknown command (0x{cmd_type:x})") 
