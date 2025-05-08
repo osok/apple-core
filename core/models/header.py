@@ -20,6 +20,8 @@ class Header(db.Model):
     sizeofcmds = db.Column(db.Integer, nullable=False)
     flags = db.Column(db.Integer, nullable=False)
     reserved = db.Column(db.Integer)  # For 64-bit headers
+    arch_offset = db.Column(db.Integer)  # Offset in fat binary (if applicable)
+    arch_size = db.Column(db.Integer)  # Size in fat binary (if applicable)
     
     # Relationships
     load_commands = db.relationship('LoadCommand', backref='header', cascade='all, delete-orphan')

@@ -24,13 +24,13 @@ This document tracks all development tasks for the Apple-Core Mach-O analyzer pr
 | P1.1 | Implement Mach-O header parser (32-bit and 64-bit formats) | C1 | Complete | Design.md: Header structures |
 | P1.2 | Implement load commands parser | C1 | Complete | Design.md: Load commands |
 | P1.3 | Implement segments and sections parser | C1 | Complete | Design.md: Segments and sections |
-| P1.4 | Implement fat/universal binary support | C1 | Pending | Design.md: Core structure |
+| P1.4 | Implement fat/universal binary support | C1 | Complete | Design.md: Core structure |
 | P1.5 | Create utility functions for endianness handling | C1 | Complete | Design.md: Header structures |
 | TP1.1 | Write tests for header parsing | P1.1, P1.5 | Complete | tests/test_macho_parser.py |
 | TP1.2 | Write tests for load commands parsing | P1.2 | Complete | tests/test_macho_parser.py |
 | TP1.3 | Write tests for segments and sections parsing | P1.3 | Complete | - |
-| TP1.4 | Write tests for fat binary handling | P1.4 | Pending | - |
-| C2 | **Checkpoint: Mach-O Parser Core** | P1.1, P1.2, P1.3, P1.4, P1.5, TP1.1, TP1.2, TP1.3, TP1.4 | Pending | - |
+| TP1.4 | Write tests for fat binary handling | P1.4 | Complete | tests/test_fat_binary.py |
+| C2 | **Checkpoint: Mach-O Parser Core** | P1.1, P1.2, P1.3, P1.4, P1.5, TP1.1, TP1.2, TP1.3, TP1.4 | Complete | - |
 | **A1** | **Data Analysis Module** | | | |
 | A1.1 | Implement file metadata extraction and storage | C2 | Pending | Design.md: SQLite schema |
 | A1.2 | Implement symbol table parsing and analysis | C2 | Pending | Design.md: Load commands |

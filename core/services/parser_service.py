@@ -24,6 +24,10 @@ MAGIC_64_LE = 0xFEEDFACF  # 64-bit little endian
 MAGIC_32_BE = 0xCEFAEDFE  # 32-bit big endian
 MAGIC_64_BE = 0xCFFAEDFE  # 64-bit big endian
 
+# Fat/Universal binary magic numbers
+FAT_MAGIC = 0xCAFEBABE    # Big-endian fat binary
+FAT_MAGIC_64 = 0xCAFEBABF  # Big-endian 64-bit fat binary
+
 # Constants for CPU types
 CPU_TYPE_X86 = 7
 CPU_TYPE_X86_64 = 0x01000007
@@ -68,6 +72,24 @@ class ParsedHeader:
     reserved: Optional[int] = None  # Only for 64-bit
     is_64_bit: bool = False
     endianness: Endianness = Endianness.LITTLE
+
+
+@dataclass
+class ParsedFatHeader:
+    """Data class for parsed Fat/Universal binary header."""
+    magic: int
+    nfat_arch: int
+    is_64_bit: bool = False
+
+
+@dataclass
+class ParsedFatArch:
+    """Data class for parsed Fat/Universal binary architecture slice."""
+    cputype: int
+    cpusubtype: int
+    offset: int
+    size: int
+    align: int
 
 
 @dataclass
@@ -130,89 +152,198 @@ class MachoParser:
         file_hash = MachoParser._calculate_hash(filepath)
         
         with open(filepath, 'rb') as f:
-            # Parse the Mach-O header
-            header_data = MachoParser.parse_header(f)
-            
-            # Create a file record in the database
-            macho_file = MachoFile(
-                filename=path.name,
-                filepath=str(path.absolute()),
-                file_size=file_size,
-                md5_hash=file_hash,
-            )
-            
-            # Create a header record
-            header = Header(
-                file=macho_file,
-                magic_number=header_data.magic,
-                cpu_type=header_data.cpu_type,
-                cpu_subtype=header_data.cpu_subtype,
-                file_type=header_data.file_type,
-                ncmds=header_data.ncmds,
-                sizeofcmds=header_data.sizeofcmds,
-                flags=header_data.flags,
-                reserved=header_data.reserved,
-            )
-            
-            db.session.add(macho_file)
-            db.session.add(header)
-            db.session.commit()
-            
-            # Parse load commands
-            load_commands = MachoParser.parse_load_commands(f, header_data)
-            
-            # Store load commands in the database
-            for cmd in load_commands:
-                load_cmd = LoadCommand(
-                    header_id=header.id,
-                    cmd_type=cmd.cmd_type,
-                    cmd_size=cmd.cmd_size,
-                    cmd_offset=cmd.cmd_offset,
-                    cmd_data=cmd.cmd_data
-                )
-                db.session.add(load_cmd)
-            
-            db.session.commit()
-            
-            # Parse segments and sections
-            segments = MachoParser.parse_segments_and_sections(f, header_data, load_commands)
-            
-            # Store segments and sections in the database
-            for segment in segments:
-                # Create segment record
-                seg_record = Segment(
-                    file_id=macho_file.id,
-                    segname=segment.segname,
-                    vmaddr=segment.vmaddr,
-                    vmsize=segment.vmsize,
-                    fileoff=segment.fileoff,
-                    filesize=segment.filesize,
-                    maxprot=segment.maxprot,
-                    initprot=segment.initprot,
-                    nsects=segment.nsects,
-                    flags=segment.flags
-                )
-                db.session.add(seg_record)
-                db.session.flush()  # Get ID for relationships
+            # Check if this is a fat/universal binary
+            if MachoParser.is_fat_binary(f):
+                # Parse the fat header
+                fat_header = MachoParser.parse_fat_header(f)
                 
-                # Create section records if they exist
-                if segment.sections:
-                    for section in segment.sections:
-                        sect_record = Section(
-                            segment_id=seg_record.id,
-                            sectname=section.sectname,
-                            segname=section.segname,
-                            addr=section.addr,
-                            size=section.size,
-                            offset=section.offset,
-                            align=section.align,
-                            flags=section.flags
+                # Create a file record in the database
+                macho_file = MachoFile(
+                    filename=path.name,
+                    filepath=str(path.absolute()),
+                    file_size=file_size,
+                    md5_hash=file_hash,
+                    is_fat_binary=True
+                )
+                
+                db.session.add(macho_file)
+                db.session.commit()
+                
+                # Parse each architecture slice
+                for i in range(fat_header.nfat_arch):
+                    fat_arch = MachoParser.parse_fat_arch(f, fat_header.is_64_bit)
+                    
+                    # Save the original position
+                    original_pos = f.tell()
+                    
+                    # Move to the Mach-O object for this architecture
+                    f.seek(fat_arch.offset)
+                    
+                    # Parse the Mach-O header for this architecture
+                    header_data = MachoParser.parse_header(f)
+                    
+                    # Create a header record for this architecture
+                    header = Header(
+                        file=macho_file,
+                        magic_number=header_data.magic,
+                        cpu_type=header_data.cpu_type,
+                        cpu_subtype=header_data.cpu_subtype,
+                        file_type=header_data.file_type,
+                        ncmds=header_data.ncmds,
+                        sizeofcmds=header_data.sizeofcmds,
+                        flags=header_data.flags,
+                        reserved=header_data.reserved,
+                        arch_offset=fat_arch.offset,
+                        arch_size=fat_arch.size
+                    )
+                    
+                    db.session.add(header)
+                    db.session.commit()
+                    
+                    # Parse load commands for this architecture
+                    load_commands = MachoParser.parse_load_commands(f, header_data)
+                    
+                    # Store load commands in the database
+                    for cmd in load_commands:
+                        load_cmd = LoadCommand(
+                            header_id=header.id,
+                            cmd_type=cmd.cmd_type,
+                            cmd_size=cmd.cmd_size,
+                            cmd_offset=cmd.cmd_offset,
+                            cmd_data=cmd.cmd_data
                         )
-                        db.session.add(sect_record)
-            
-            db.session.commit()
-            
-            return macho_file
+                        db.session.add(load_cmd)
+                    
+                    db.session.commit()
+                    
+                    # Parse segments and sections for this architecture
+                    segments = MachoParser.parse_segments_and_sections(f, header_data, load_commands)
+                    
+                    # Store segments and sections in the database
+                    for segment in segments:
+                        # Create segment record
+                        seg_record = Segment(
+                            file_id=macho_file.id,
+                            segname=segment.segname,
+                            vmaddr=segment.vmaddr,
+                            vmsize=segment.vmsize,
+                            fileoff=segment.fileoff,
+                            filesize=segment.filesize,
+                            maxprot=segment.maxprot,
+                            initprot=segment.initprot,
+                            nsects=segment.nsects,
+                            flags=segment.flags
+                        )
+                        db.session.add(seg_record)
+                        db.session.flush()  # Get ID for relationships
+                        
+                        # Create section records if they exist
+                        if segment.sections:
+                            for section in segment.sections:
+                                sect_record = Section(
+                                    segment_id=seg_record.id,
+                                    sectname=section.sectname,
+                                    segname=section.segname,
+                                    addr=section.addr,
+                                    size=section.size,
+                                    offset=section.offset,
+                                    align=section.align,
+                                    flags=section.flags
+                                )
+                                db.session.add(sect_record)
+                    
+                    db.session.commit()
+                    
+                    # Restore the original position to read the next fat arch
+                    f.seek(original_pos)
+                
+                return macho_file
+            else:
+                # Regular Mach-O file processing
+                # Parse the Mach-O header
+                header_data = MachoParser.parse_header(f)
+                
+                # Create a file record in the database
+                macho_file = MachoFile(
+                    filename=path.name,
+                    filepath=str(path.absolute()),
+                    file_size=file_size,
+                    md5_hash=file_hash,
+                    is_fat_binary=False
+                )
+                
+                # Create a header record
+                header = Header(
+                    file=macho_file,
+                    magic_number=header_data.magic,
+                    cpu_type=header_data.cpu_type,
+                    cpu_subtype=header_data.cpu_subtype,
+                    file_type=header_data.file_type,
+                    ncmds=header_data.ncmds,
+                    sizeofcmds=header_data.sizeofcmds,
+                    flags=header_data.flags,
+                    reserved=header_data.reserved
+                )
+                
+                db.session.add(macho_file)
+                db.session.add(header)
+                db.session.commit()
+                
+                # Parse load commands
+                load_commands = MachoParser.parse_load_commands(f, header_data)
+                
+                # Store load commands in the database
+                for cmd in load_commands:
+                    load_cmd = LoadCommand(
+                        header_id=header.id,
+                        cmd_type=cmd.cmd_type,
+                        cmd_size=cmd.cmd_size,
+                        cmd_offset=cmd.cmd_offset,
+                        cmd_data=cmd.cmd_data
+                    )
+                    db.session.add(load_cmd)
+                
+                db.session.commit()
+                
+                # Parse segments and sections
+                segments = MachoParser.parse_segments_and_sections(f, header_data, load_commands)
+                
+                # Store segments and sections in the database
+                for segment in segments:
+                    # Create segment record
+                    seg_record = Segment(
+                        file_id=macho_file.id,
+                        segname=segment.segname,
+                        vmaddr=segment.vmaddr,
+                        vmsize=segment.vmsize,
+                        fileoff=segment.fileoff,
+                        filesize=segment.filesize,
+                        maxprot=segment.maxprot,
+                        initprot=segment.initprot,
+                        nsects=segment.nsects,
+                        flags=segment.flags
+                    )
+                    db.session.add(seg_record)
+                    db.session.flush()  # Get ID for relationships
+                    
+                    # Create section records if they exist
+                    if segment.sections:
+                        for section in segment.sections:
+                            sect_record = Section(
+                                segment_id=seg_record.id,
+                                sectname=section.sectname,
+                                segname=section.segname,
+                                addr=section.addr,
+                                size=section.size,
+                                offset=section.offset,
+                                align=section.align,
+                                flags=section.flags
+                            )
+                            db.session.add(sect_record)
+                
+                db.session.commit()
+                
+                return macho_file
     
     @staticmethod
     def parse_header(file: BinaryIO) -> ParsedHeader:
@@ -538,4 +669,91 @@ class MachoParser:
             
             sections.append(section)
         
-        return sections 
+        return sections
+    
+    @staticmethod
+    def is_fat_binary(file: BinaryIO) -> bool:
+        """
+        Check if a file is a fat/universal binary.
+        
+        Args:
+            file: Binary file object positioned at the start
+            
+        Returns:
+            bool: True if the file is a fat binary, False otherwise
+        """
+        # Save the current position
+        current_pos = file.tell()
+        
+        # Read magic number (first 4 bytes)
+        magic_bytes = file.read(4)
+        file.seek(current_pos)  # Restore the position
+        
+        # Check if it's a fat binary magic number
+        if len(magic_bytes) == 4:
+            magic = struct.unpack('>I', magic_bytes)[0]  # Fat headers are always big endian
+            return magic in (FAT_MAGIC, FAT_MAGIC_64)
+        
+        return False
+    
+    @staticmethod
+    def parse_fat_header(file: BinaryIO) -> ParsedFatHeader:
+        """
+        Parse a fat binary header.
+        
+        Args:
+            file: Binary file object positioned at the start
+            
+        Returns:
+            ParsedFatHeader: Parsed fat header information
+        """
+        # Fat headers are always big endian
+        magic = struct.unpack('>I', file.read(4))[0]
+        nfat_arch = struct.unpack('>I', file.read(4))[0]
+        
+        is_64_bit = (magic == FAT_MAGIC_64)
+        
+        return ParsedFatHeader(
+            magic=magic,
+            nfat_arch=nfat_arch,
+            is_64_bit=is_64_bit
+        )
+    
+    @staticmethod
+    def parse_fat_arch(file: BinaryIO, is_64_bit: bool) -> ParsedFatArch:
+        """
+        Parse a fat architecture structure.
+        
+        Args:
+            file: Binary file object positioned at the start of the arch structure
+            is_64_bit: Whether this is a 64-bit fat binary
+            
+        Returns:
+            ParsedFatArch: Parsed fat architecture information
+        """
+        # Fat arch structures are always big endian
+        cputype = struct.unpack('>I', file.read(4))[0]
+        cpusubtype = struct.unpack('>I', file.read(4))[0]
+        
+        if is_64_bit:
+            # 64-bit fat arch structure has 64-bit offset and size
+            offset = struct.unpack('>Q', file.read(8))[0]
+            size = struct.unpack('>Q', file.read(8))[0]
+        else:
+            # 32-bit fat arch structure has 32-bit offset and size
+            offset = struct.unpack('>I', file.read(4))[0]
+            size = struct.unpack('>I', file.read(4))[0]
+        
+        align = struct.unpack('>I', file.read(4))[0]
+        
+        # Skip reserved field in 64-bit fat arch
+        if is_64_bit:
+            file.read(4)  # Skip reserved field
+        
+        return ParsedFatArch(
+            cputype=cputype,
+            cpusubtype=cpusubtype,
+            offset=offset,
+            size=size,
+            align=align
+        ) 
