@@ -5,7 +5,7 @@ Parser services for Mach-O file analysis.
 import os
 import struct
 import pickle
-from typing import BinaryIO, Dict, Any, Tuple, Optional, List
+from typing import BinaryIO, Dict, Any, Tuple, Optional, List, NamedTuple
 from io import BytesIO
 from pathlib import Path
 from dataclasses import dataclass
@@ -57,6 +57,34 @@ LC_CODE_SIGNATURE = 0x1D     # Code signature
 LC_MAIN = 0x80000028         # Executable's main function
 LC_FUNCTION_STARTS = 0x26    # Function start addresses
 LC_DATA_IN_CODE = 0x29       # Data in code markers
+
+# Symbol type masks
+N_STAB = 0xe0  # Symbolic debugging entry - If any of these bits are set, the entry is a symbolic debugging entry
+N_PEXT = 0x10  # Private external symbol
+N_TYPE = 0x0e  # Type field
+N_EXT  = 0x01  # External symbol
+
+# Symbol type values (N_TYPE)
+N_UNDF = 0x0   # Undefined symbol
+N_ABS  = 0x2   # Absolute symbol
+N_SECT = 0xe   # Symbol is defined in the section number given in n_sect
+N_PBUD = 0xc   # Prebound undefined symbol
+N_INDR = 0xa   # Indirect symbol
+
+# Symbol reference flags
+REFERENCE_FLAG_UNDEFINED_NON_LAZY = 0x0
+REFERENCE_FLAG_UNDEFINED_LAZY     = 0x1
+REFERENCE_FLAG_DEFINED            = 0x2
+REFERENCE_FLAG_PRIVATE_DEFINED    = 0x3
+REFERENCE_FLAG_PRIVATE_UNDEFINED_NON_LAZY = 0x4
+REFERENCE_FLAG_PRIVATE_UNDEFINED_LAZY = 0x5
+
+# Additional symbol flags
+REFERENCED_DYNAMICALLY = 0x10
+N_DESC_DISCARDED = 0x20
+N_NO_DEAD_STRIP = 0x20
+N_WEAK_REF = 0x40
+N_WEAK_DEF = 0x80
 
 
 @dataclass
@@ -128,6 +156,22 @@ class ParsedSection:
     offset: int
     align: int
     flags: int
+
+
+@dataclass
+class ParsedSymbol:
+    """
+    Represents a parsed symbol from a Mach-O file's symbol table.
+    """
+    name: str
+    type: int
+    sect: int
+    desc: int
+    value: int
+    is_external: bool
+    is_debug: bool
+    is_local: bool
+    is_defined: bool
 
 
 class MachoParser:
@@ -756,4 +800,103 @@ class MachoParser:
             offset=offset,
             size=size,
             align=align
-        ) 
+        )
+    
+    @staticmethod
+    def parse_symbol_table(file: BinaryIO, symtab_cmd, magic: int) -> List[ParsedSymbol]:
+        """
+        Parse the symbol table of a Mach-O file.
+        
+        Args:
+            file: Binary file object
+            symtab_cmd: Symbol table command
+            magic: Magic number from the Mach-O header
+            
+        Returns:
+            List[ParsedSymbol]: List of parsed symbols
+        """
+        symbols = []
+        is_64bit = is_64_bit(magic)
+        endianness = detect_endianness(magic)
+        symbol_size = 16 if is_64bit else 12  # Size of nlist_64 or nlist structure
+        
+        # Read string table
+        file.seek(symtab_cmd.stroff)
+        string_table = file.read(symtab_cmd.strsize)
+        
+        # Seek to symbol table
+        file.seek(symtab_cmd.symoff)
+        
+        for i in range(symtab_cmd.nsyms):
+            if is_64bit:
+                # Read 64-bit symbol entry
+                n_strx = read_uint32(file, endianness)
+                n_type = int.from_bytes(file.read(1), byteorder='little')
+                n_sect = int.from_bytes(file.read(1), byteorder='little')
+                n_desc = struct.unpack('<h', file.read(2))[0]  # 16-bit signed
+                n_value = read_uint64(file, endianness)
+            else:
+                # Read 32-bit symbol entry
+                n_strx = read_uint32(file, endianness)
+                n_type = int.from_bytes(file.read(1), byteorder='little')
+                n_sect = int.from_bytes(file.read(1), byteorder='little')
+                n_desc = struct.unpack('<h', file.read(2))[0]  # 16-bit signed
+                n_value = read_uint32(file, endianness)
+            
+            # Get symbol name from string table
+            try:
+                # Start at the string offset and read until null terminator
+                name_start = n_strx
+                if name_start < 0 or name_start >= len(string_table):
+                    name = f"INVALID_STRING_OFFSET_{n_strx}"
+                else:
+                    name_end = string_table.find(b'\0', name_start)
+                    if name_end < 0:
+                        name = string_table[name_start:].decode('utf-8', errors='replace')
+                    else:
+                        name = string_table[name_start:name_end].decode('utf-8', errors='replace')
+            except Exception:
+                name = f"INVALID_STRING_{n_strx}"
+            
+            # Determine symbol characteristics
+            is_external = bool(n_type & N_EXT)
+            is_debug = bool(n_type & N_STAB)
+            n_type_masked = n_type & N_TYPE
+            
+            is_defined = n_type_masked == N_SECT or n_type_masked == N_ABS
+            is_local = not is_external and not is_debug
+            
+            # Create ParsedSymbol object
+            symbol = ParsedSymbol(
+                name=name,
+                type=n_type,
+                sect=n_sect,
+                desc=n_desc,
+                value=n_value,
+                is_external=is_external,
+                is_debug=is_debug,
+                is_local=is_local,
+                is_defined=is_defined
+            )
+            
+            symbols.append(symbol)
+        
+        return symbols
+    
+    @staticmethod
+    def get_symbol_type_name(type_value: int) -> str:
+        """Convert symbol type value to human-readable name."""
+        n_type = type_value & N_TYPE
+        
+        if n_type == N_UNDF:
+            return "Undefined"
+        elif n_type == N_ABS:
+            return "Absolute"
+        elif n_type == N_SECT:
+            return "Defined in Section"
+        elif n_type == N_PBUD:
+            return "Prebound Undefined"
+        elif n_type == N_INDR:
+            return "Indirect"
+        else:
+            return f"Unknown ({n_type})" 

@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Symbol Tables - Apple-Core{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Symbol Tables: {{ symbol_data.file.filename }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('analyzer.overview', file_id=symbol_data.file.id) }}" class="btn btn-sm btn-outline-secondary">Back to Overview</a>
+            <a href="{{ url_for('analyzer.symbols', file_id=symbol_data.file.id, extract='true') }}" class="btn btn-sm btn-primary">Refresh Symbols</a>
+        </div>
+    </div>
+</div>
+
+<!-- Symbol Table Info Card -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Symbol Table Information</h5>
+    </div>
+    <div class="card-body">
+        {% if symbol_data.symtab %}
+            <table class="table table-sm">
+                <tbody>
+                    <tr>
+                        <th scope="row">Symbol Offset</th>
+                        <td><code>0x{{ symbol_data.symtab.symoff|hex }}</code></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Number of Symbols</th>
+                        <td>{{ symbol_data.symtab.nsyms }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">String Table Offset</th>
+                        <td><code>0x{{ symbol_data.symtab.stroff|hex }}</code></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">String Table Size</th>
+                        <td>{{ symbol_data.symtab.strsize }} bytes</td>
+                    </tr>
+                </tbody>
+            </table>
+        {% else %}
+            <p class="text-muted">No symbol table information available.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Dynamic Symbol Table Info Card -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Dynamic Symbol Table Information</h5>
+    </div>
+    <div class="card-body">
+        {% if symbol_data.dysymtab %}
+            <table class="table table-sm">
+                <tbody>
+                    <tr>
+                        <th scope="row">Local Symbols</th>
+                        <td>{{ symbol_data.dysymtab.nlocalsym }} (starting at index {{ symbol_data.dysymtab.ilocalsym }})</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Defined External Symbols</th>
+                        <td>{{ symbol_data.dysymtab.nextdefsym }} (starting at index {{ symbol_data.dysymtab.iextdefsym }})</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Undefined Symbols</th>
+                        <td>{{ symbol_data.dysymtab.nundefsym }} (starting at index {{ symbol_data.dysymtab.iundefsym }})</td>
+                    </tr>
+                    {% if symbol_data.dysymtab.nindirectsyms is not none %}
+                    <tr>
+                        <th scope="row">Indirect Symbols</th>
+                        <td>{{ symbol_data.dysymtab.nindirectsyms }} (offset: <code>0x{{ symbol_data.dysymtab.indirectsymoff|hex }}</code>)</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="text-muted">No dynamic symbol table information available.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Symbols Card -->
+<div class="card mb-4">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Symbols ({{ symbol_data.symbols|length }})</h5>
+        <div class="input-group input-group-sm w-50">
+            <input type="text" class="form-control" id="symbolSearch" placeholder="Search symbols...">
+            <button class="btn btn-outline-light" type="button" onclick="filterSymbols()">Search</button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="symbolTable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Value</th>
+                    <th>Section</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for symbol in symbol_data.symbols %}
+                <tr class="{% if not symbol.is_defined %}text-warning{% elif symbol.is_external %}text-primary{% endif %}">
+                    <td><code>{{ symbol.name }}</code></td>
+                    <td>
+                        {% if symbol.is_debug %}Debug
+                        {% elif not symbol.is_defined %}Undefined
+                        {% elif symbol.is_external %}External
+                        {% else %}Local
+                        {% endif %}
+                    </td>
+                    <td><code>0x{{ symbol.value|hex }}</code></td>
+                    <td>{{ symbol.sect }}</td>
+                    <td>
+                        <small>
+                            Type: {{ symbol.type }}
+                            {% if symbol.is_external %}<span class="badge bg-primary">External</span>{% endif %}
+                            {% if symbol.is_debug %}<span class="badge bg-info">Debug</span>{% endif %}
+                            {% if not symbol.is_defined %}<span class="badge bg-warning text-dark">Undefined</span>{% endif %}
+                        </small>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center">No symbols found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Symbol Distribution Visualization -->
+<div class="card mb-4">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Symbol Distribution</h5>
+    </div>
+    <div class="card-body">
+        <div id="symbolDistribution" style="height: 400px;"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+    // Simple filtering function for the symbol table
+    function filterSymbols() {
+        const input = document.getElementById('symbolSearch');
+        const filter = input.value.toLowerCase();
+        const table = document.getElementById('symbolTable');
+        const tr = table.getElementsByTagName('tr');
+        
+        for (let i = 1; i < tr.length; i++) {
+            const tdName = tr[i].getElementsByTagName('td')[0];
+            if (tdName) {
+                const txtValue = tdName.textContent || tdName.innerText;
+                if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                    tr[i].style.display = '';
+                } else {
+                    tr[i].style.display = 'none';
+                }
+            }
+        }
+    }
+    
+    // Symbol distribution chart
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('{{ url_for("analyzer.get_symbol_distribution", file_id=symbol_data.file.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.length > 0) {
+                    createPieChart(data);
+                }
+            })
+            .catch(error => console.error('Error fetching symbol distribution:', error));
+    });
+    
+    function createPieChart(data) {
+        // Set up dimensions
+        const width = document.getElementById('symbolDistribution').clientWidth;
+        const height = 400;
+        const radius = Math.min(width, height) / 2;
+        
+        // Create SVG
+        const svg = d3.select('#symbolDistribution')
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height)
+            .append('g')
+            .attr('transform', `translate(${width / 2}, ${height / 2})`);
+        
+        // Color scale
+        const color = d3.scaleOrdinal()
+            .domain(data.map(d => d.name))
+            .range(d3.schemeCategory10);
+        
+        // Pie generator
+        const pie = d3.pie()
+            .value(d => d.value);
+        
+        // Arc generator
+        const arc = d3.arc()
+            .innerRadius(0)
+            .outerRadius(radius * 0.8);
+        
+        // Label arc
+        const labelArc = d3.arc()
+            .innerRadius(radius * 0.5)
+            .outerRadius(radius * 0.8);
+        
+        // Draw pie chart
+        const g = svg.selectAll('.arc')
+            .data(pie(data))
+            .enter()
+            .append('g')
+            .attr('class', 'arc');
+        
+        g.append('path')
+            .attr('d', arc)
+            .style('fill', d => color(d.data.name))
+            .style('stroke', 'white')
+            .style('stroke-width', '2px');
+        
+        // Add labels
+        g.append('text')
+            .attr('transform', d => `translate(${labelArc.centroid(d)})`)
+            .attr('dy', '.35em')
+            .style('text-anchor', 'middle')
+            .style('fill', 'white')
+            .text(d => d.data.name + ': ' + d.data.value);
+        
+        // Add legend
+        const legend = svg.selectAll('.legend')
+            .data(data)
+            .enter()
+            .append('g')
+            .attr('class', 'legend')
+            .attr('transform', (d, i) => `translate(${radius + 20}, ${-radius + 20 + i * 20})`);
+        
+        legend.append('rect')
+            .attr('width', 18)
+            .attr('height', 18)
+            .style('fill', d => color(d.name));
+        
+        legend.append('text')
+            .attr('x', 24)
+            .attr('y', 9)
+            .attr('dy', '.35em')
+            .text(d => `${d.name} (${d.value})`);
+    }
+</script>
+{% endblock %} 

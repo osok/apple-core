@@ -8,8 +8,15 @@ from core.models.macho_file import MachoFile
 from core.models.header import Header
 from core.models.segment import Segment
 from core.models.section import Section
-from core.services.analyzer_service import get_file_data, get_header_data, get_segment_data, get_section_data
+from core.services.analyzer_service import (
+    get_file_data, get_header_data, get_segment_data, get_section_data,
+    extract_symbol_tables, get_symbol_table_data, identify_cross_references,
+    get_cross_reference_data
+)
 from core.services.editor_service import edit_field, get_edit_history
+from core.services.visualization_service import (
+    generate_symbol_distribution_data, generate_cross_reference_network
+)
 
 # Create blueprint
 analyzer_bp = Blueprint('analyzer', __name__)
@@ -109,4 +116,69 @@ def add_notes(file_id):
         db.session.commit()
         flash('Notes updated successfully')
     
-    return redirect(url_for('analyzer.overview', file_id=file_id)) 
+    return redirect(url_for('analyzer.overview', file_id=file_id))
+
+@analyzer_bp.route('/files/<int:file_id>/symbols', methods=['GET'])
+def symbols(file_id):
+    """Show symbol table information for a Mach-O file."""
+    # Check if we need to extract symbol tables first
+    if request.args.get('extract') == 'true':
+        try:
+            symtab, dysymtab = extract_symbol_tables(file_id)
+            if symtab and dysymtab:
+                flash('Symbol tables extracted successfully')
+            elif symtab:
+                flash('Symbol table extracted, no dynamic symbol table found')
+            else:
+                flash('No symbol tables found in the file')
+        except Exception as e:
+            flash(f'Error extracting symbol tables: {str(e)}')
+    
+    # Get symbol data
+    symbol_data = get_symbol_table_data(file_id)
+    if not symbol_data:
+        abort(404)
+    
+    return render_template('analyzer/symbols.html', symbol_data=symbol_data)
+
+@analyzer_bp.route('/api/files/<int:file_id>/symbol_distribution', methods=['GET'])
+def get_symbol_distribution(file_id):
+    """API endpoint to get symbol distribution data for visualization."""
+    file = MachoFile.query.get_or_404(file_id)
+    
+    try:
+        # Get symbol distribution data from visualization service
+        distribution_data = generate_symbol_distribution_data(file_id)
+        return jsonify(distribution_data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@analyzer_bp.route('/files/<int:file_id>/xrefs', methods=['GET'])
+def xrefs(file_id):
+    """Show cross-reference information for a Mach-O file."""
+    # Check if we need to identify cross-references first
+    if request.args.get('analyze') == 'true':
+        try:
+            xref_count = identify_cross_references(file_id)
+            flash(f'Identified {xref_count} cross-references')
+        except Exception as e:
+            flash(f'Error identifying cross-references: {str(e)}')
+    
+    # Get cross-reference data
+    xref_data = get_cross_reference_data(file_id)
+    if not xref_data:
+        abort(404)
+    
+    return render_template('analyzer/xrefs.html', xref_data=xref_data)
+
+@analyzer_bp.route('/api/files/<int:file_id>/xref_network', methods=['GET'])
+def get_xref_network(file_id):
+    """API endpoint to get cross-reference network data for visualization."""
+    file = MachoFile.query.get_or_404(file_id)
+    
+    try:
+        # Get cross-reference network data from visualization service
+        network_data = generate_cross_reference_network(file_id)
+        return jsonify(network_data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500 

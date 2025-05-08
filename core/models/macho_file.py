@@ -19,6 +19,8 @@ class MachoFile(db.Model):
     md5_hash = db.Column(db.String(32), nullable=False)
     user_notes = db.Column(db.Text)
     is_fat_binary = db.Column(db.Boolean, default=False)
+    file_type = db.Column(db.String(50))
+    architecture = db.Column(db.String(50))
     
     # Relationships
     headers = db.relationship('Header', backref='file', cascade='all, delete-orphan')

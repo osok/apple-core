@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Cross References - Apple-Core{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Cross References: {{ xref_data.file.filename }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('analyzer.overview', file_id=xref_data.file.id) }}" class="btn btn-sm btn-outline-secondary">Back to Overview</a>
+            <a href="{{ url_for('analyzer.xrefs', file_id=xref_data.file.id, analyze='true') }}" class="btn btn-sm btn-primary">Analyze Cross-References</a>
+        </div>
+    </div>
+</div>
+
+<!-- Cross References Visualization -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Cross Reference Network</h5>
+    </div>
+    <div class="card-body">
+        <div id="xrefNetwork" style="height: 600px; border: 1px solid #ddd;"></div>
+    </div>
+</div>
+
+<!-- Cross References List -->
+<div class="card mb-4">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Cross References ({{ xref_data.count }})</h5>
+        <div class="input-group input-group-sm w-50">
+            <input type="text" class="form-control" id="xrefSearch" placeholder="Search...">
+            <button class="btn btn-outline-light" type="button" onclick="filterXrefs()">Search</button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="xrefTable">
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Target</th>
+                    <th>Type</th>
+                    <th>Offset</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for xref in xref_data.xrefs %}
+                <tr>
+                    <td>
+                        <strong>{{ xref.source_type|capitalize }}</strong>: 
+                        {% if xref.source_type == 'symbol' %}
+                            <code>{{ xref.source_name }}</code>
+                        {% else %}
+                            <code>{{ xref.source_name }}</code>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ xref.target_type|capitalize }}</strong>: 
+                        {% if xref.target_type == 'symbol' %}
+                            <code>{{ xref.target_name }}</code>
+                        {% else %}
+                            <code>{{ xref.target_name }}</code>
+                        {% endif %}
+                    </td>
+                    <td>{{ xref.reference_type }}</td>
+                    <td>
+                        {% if xref.offset is not none %}
+                            <code>0x{{ xref.offset|hex }}</code>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center">No cross-references found. Click "Analyze Cross-References" to identify them.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-force@3"></script>
+<script>
+    // Simple filtering function for the xref table
+    function filterXrefs() {
+        const input = document.getElementById('xrefSearch');
+        const filter = input.value.toLowerCase();
+        const table = document.getElementById('xrefTable');
+        const tr = table.getElementsByTagName('tr');
+        
+        for (let i = 1; i < tr.length; i++) {
+            const td1 = tr[i].getElementsByTagName('td')[0];
+            const td2 = tr[i].getElementsByTagName('td')[1];
+            let txtValue = '';
+            
+            if (td1 && td2) {
+                txtValue = td1.textContent + td2.textContent;
+            }
+            
+            if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                tr[i].style.display = '';
+            } else {
+                tr[i].style.display = 'none';
+            }
+        }
+    }
+    
+    // Network visualization
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('{{ url_for("analyzer.get_xref_network", file_id=xref_data.file.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.nodes && data.nodes.length > 0) {
+                    createNetworkGraph(data);
+                }
+            })
+            .catch(error => console.error('Error fetching cross-reference network:', error));
+    });
+    
+    function createNetworkGraph(graph) {
+        // Set up dimensions
+        const width = document.getElementById('xrefNetwork').clientWidth;
+        const height = 600;
+        
+        // Color scale for node types
+        const color = d3.scaleOrdinal()
+            .domain(['symbol', 'section'])
+            .range(['#6baed6', '#fd8d3c']);
+        
+        // Create SVG
+        const svg = d3.select('#xrefNetwork')
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height);
+        
+        // Add zoom behavior
+        const g = svg.append('g');
+        
+        svg.call(d3.zoom()
+            .scaleExtent([0.1, 8])
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            }));
+        
+        // Create the force simulation
+        const simulation = d3.forceSimulation(graph.nodes)
+            .force('link', d3.forceLink(graph.links).id(d => d.id).distance(100))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(30));
+        
+        // Add links
+        const link = g.append('g')
+            .selectAll('line')
+            .data(graph.links)
+            .enter()
+            .append('line')
+            .attr('stroke', '#999')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', d => Math.sqrt(d.value || 1));
+        
+        // Add nodes
+        const node = g.append('g')
+            .selectAll('circle')
+            .data(graph.nodes)
+            .enter()
+            .append('g')
+            .call(d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended));
+        
+        node.append('circle')
+            .attr('r', 8)
+            .attr('fill', d => color(d.category))
+            .append('title')
+            .text(d => d.name);
+        
+        node.append('text')
+            .attr('dx', 12)
+            .attr('dy', '.35em')
+            .text(d => d.name.length > 20 ? d.name.substring(0, 17) + '...' : d.name)
+            .style('font-size', '10px');
+        
+        // Simulation tick function
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+            
+            node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+        
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+        
+        // Add legend
+        const legend = svg.append('g')
+            .attr('class', 'legend')
+            .attr('transform', 'translate(20,20)');
+        
+        const legendData = [
+            { category: 'symbol', label: 'Symbol' },
+            { category: 'section', label: 'Section' }
+        ];
+        
+        legend.selectAll('rect')
+            .data(legendData)
+            .enter()
+            .append('rect')
+            .attr('x', 0)
+            .attr('y', (d, i) => i * 20)
+            .attr('width', 12)
+            .attr('height', 12)
+            .attr('fill', d => color(d.category));
+        
+        legend.selectAll('text')
+            .data(legendData)
+            .enter()
+            .append('text')
+            .attr('x', 20)
+            .attr('y', (d, i) => i * 20 + 10)
+            .text(d => d.label);
+    }
+</script>
+{% endblock %} 

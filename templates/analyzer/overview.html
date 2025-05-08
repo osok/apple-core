@@ -5,6 +5,14 @@
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">File Overview: {{ file_data.file.filename }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('analyzer.symbols', file_id=file_data.file.id) }}" class="btn btn-sm btn-outline-secondary">Symbol Tables</a>
+            <a href="{{ url_for('analyzer.xrefs', file_id=file_data.file.id) }}" class="btn btn-sm btn-outline-secondary">Cross References</a>
+            <a href="{{ url_for('analyzer.header', file_id=file_data.file.id) }}" class="btn btn-sm btn-outline-secondary">Header Details</a>
+            <a href="{{ url_for('analyzer.segments', file_id=file_data.file.id) }}" class="btn btn-sm btn-outline-secondary">Segments</a>
+        </div>
+    </div>
 </div>
 
 <div class="row">
@@ -24,6 +32,14 @@
                         <tr>
                             <th scope="row">File Size</th>
                             <td>{{ file_data.file.file_size }} bytes ({{ (file_data.file.file_size / 1024)|round(2) }} KB)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">File Type</th>
+                            <td>{{ file_data.file.file_type if file_data.file.file_type else 'Unknown' }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Architecture</th>
+                            <td>{{ file_data.file.architecture if file_data.file.architecture else 'Unknown' }}</td>
                         </tr>
                         <tr>
                             <th scope="row">MD5 Hash</th>

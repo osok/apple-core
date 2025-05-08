@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from werkzeug.utils import secure_filename
 from core import db
 from core.models.macho_file import MachoFile
-from core.services.analyzer_service import process_macho_file
+from core.services.analyzer_service import process_macho_file, extract_file_metadata
 
 # Create blueprint
 main_bp = Blueprint('main', __name__)
@@ -48,29 +48,18 @@ def upload_file():
         # Save the file
         file.save(file_path)
         
-        # Calculate file size and MD5 hash
-        file_size = os.path.getsize(file_path)
-        with open(file_path, 'rb') as f:
-            file_hash = hashlib.md5(f.read()).hexdigest()
-        
-        # Create file record in database
-        macho_file = MachoFile(
-            filename=filename,
-            filepath=file_path,
-            file_size=file_size,
-            md5_hash=file_hash
-        )
-        db.session.add(macho_file)
-        db.session.commit()
-        
-        # Process the file asynchronously
         try:
+            # Extract and store file metadata
+            macho_file = extract_file_metadata(file_path)
+            
+            # Process the file
             process_macho_file(macho_file.id)
             flash(f'File {filename} uploaded and processed successfully')
+            
+            return redirect(url_for('analyzer.overview', file_id=macho_file.id))
         except Exception as e:
             flash(f'Error processing file: {str(e)}')
-        
-        return redirect(url_for('analyzer.overview', file_id=macho_file.id))
+            return redirect(url_for('main.index'))
     
     flash('Invalid file type')
     return redirect(url_for('main.index')) 

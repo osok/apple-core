@@ -8,6 +8,8 @@ from core.models.load_command import LoadCommand
 from core.models.segment import Segment
 from core.models.section import Section
 from core.models.edit_history import EditHistory
+from core.models.symbol import Symbol, SymbolTable, DynamicSymbolTable
+from core.models.cross_reference import CrossReference
 
 # Add all models that should be included in migrations
 __all__ = [
@@ -16,5 +18,9 @@ __all__ = [
     'LoadCommand',
     'Segment',
     'Section',
-    'EditHistory'
+    'EditHistory',
+    'Symbol',
+    'SymbolTable',
+    'DynamicSymbolTable',
+    'CrossReference'
 ] 
