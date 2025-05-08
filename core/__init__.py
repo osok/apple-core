@@ -47,6 +47,14 @@ def create_app(config_name=None):
     login_manager.init_app(app)
     csrf.init_app(app)
     
+    # Register custom Jinja2 filters
+    @app.template_filter('hex')
+    def hex_filter(value):
+        """Convert an integer to its hexadecimal representation without '0x' prefix."""
+        if value is None:
+            return "00000000"
+        return format(int(value), 'x')
+    
     # Register blueprints
     from core.views.main import main_bp
     app.register_blueprint(main_bp)

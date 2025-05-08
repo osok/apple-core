@@ -66,17 +66,24 @@ def process_macho_file(file_id):
                 reserved=getattr(mach_header, 'reserved', None)
             )
             db.session.add(header_record)
-            db.session.flush()  # Get ID for relationships
+            db.session.flush()
             
             # Process load commands
             for cmd_index, (lc, cmd, data) in enumerate(header.commands):
-                # Create LoadCommand record
+                # Create LoadCommand record - ensure cmd_data is bytes
+                cmd_data = bytes(data) if isinstance(data, list) else data
+                if cmd_data is None:
+                    cmd_data = b''  # Ensure it's never None
+                elif not isinstance(cmd_data, bytes):
+                    # Convert whatever it is to string and then bytes
+                    cmd_data = str(data).encode('utf-8')
+                
                 load_cmd = LoadCommand(
                     header_id=header_record.id,
                     cmd_type=lc.cmd,
                     cmd_size=lc.cmdsize,
                     cmd_offset=cmd_index,  # Store index for reference
-                    cmd_data=data  # Store raw command data
+                    cmd_data=cmd_data  # Store raw command data as bytes
                 )
                 db.session.add(load_cmd)
                 
@@ -98,7 +105,7 @@ def process_macho_file(file_id):
                         flags=cmd.flags
                     )
                     db.session.add(segment)
-                    db.session.flush()  # Get ID for relationships
+                    db.session.flush()
                     
                     # Process sections within the segment
                     for sect in cmd.sections:
@@ -117,7 +124,7 @@ def process_macho_file(file_id):
                             flags=sect.flags
                         )
                         db.session.add(section)
-                
+        
         # Commit all changes to database
         db.session.commit()
         return True

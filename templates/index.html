@@ -16,6 +16,7 @@
                         <p class="card-text">Upload a Mach-O binary file for analysis. Supports executables, dynamic libraries, object files, and more.</p>
                         
                         <form action="{{ url_for('main.upload_file') }}" method="POST" enctype="multipart/form-data" class="mb-4">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <div class="mb-3">
                                 <label for="file" class="form-label">Select file</label>
                                 <input type="file" class="form-control" id="file" name="file" required>
