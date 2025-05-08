@@ -22,7 +22,7 @@ This document tracks all development tasks for the Apple-Core Mach-O analyzer pr
 | C1 | **Checkpoint: Project Foundation** | S1.1, S1.2, S1.3, S1.4, S1.5, TS1.1, TS1.2 | Complete | - |
 | **P1** | **Mach-O Parser Core** | | | |
 | P1.1 | Implement Mach-O header parser (32-bit and 64-bit formats) | C1 | Complete | Design.md: Header structures |
-| P1.2 | Implement load commands parser | C1 | Pending | Design.md: Load commands |
+| P1.2 | Implement load commands parser | C1 | In Progress | Design.md: Load commands |
 | P1.3 | Implement segments and sections parser | C1 | Pending | Design.md: Segments and sections |
 | P1.4 | Implement fat/universal binary support | C1 | Pending | Design.md: Core structure |
 | P1.5 | Create utility functions for endianness handling | C1 | Complete | Design.md: Header structures |
