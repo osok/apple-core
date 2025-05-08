@@ -10,6 +10,19 @@ from core.models.header import Header
 from core.models.load_command import LoadCommand
 from core.models.segment import Segment
 from core.models.section import Section
+from core.services.parser_service import MachoParser
+
+def parse_and_store_macho_file(filepath):
+    """
+    Parse a Mach-O file and store its data using our custom parser.
+    
+    Args:
+        filepath (str): Path to the Mach-O file
+        
+    Returns:
+        MachoFile: Database model instance with file information
+    """
+    return MachoParser.parse_file(filepath)
 
 def process_macho_file(file_id):
     """

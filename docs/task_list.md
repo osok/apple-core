@@ -21,12 +21,12 @@ This document tracks all development tasks for the Apple-Core Mach-O analyzer pr
 | TS1.2 | Write tests for database schema validation | S1.3 | Complete | tests/test_db_schema.py |
 | C1 | **Checkpoint: Project Foundation** | S1.1, S1.2, S1.3, S1.4, S1.5, TS1.1, TS1.2 | Complete | - |
 | **P1** | **Mach-O Parser Core** | | | |
-| P1.1 | Implement Mach-O header parser (32-bit and 64-bit formats) | C1 | Pending | Design.md: Header structures |
+| P1.1 | Implement Mach-O header parser (32-bit and 64-bit formats) | C1 | Complete | Design.md: Header structures |
 | P1.2 | Implement load commands parser | C1 | Pending | Design.md: Load commands |
 | P1.3 | Implement segments and sections parser | C1 | Pending | Design.md: Segments and sections |
 | P1.4 | Implement fat/universal binary support | C1 | Pending | Design.md: Core structure |
-| P1.5 | Create utility functions for endianness handling | C1 | Pending | Design.md: Header structures |
-| TP1.1 | Write tests for header parsing | P1.1, P1.5 | Pending | - |
+| P1.5 | Create utility functions for endianness handling | C1 | Complete | Design.md: Header structures |
+| TP1.1 | Write tests for header parsing | P1.1, P1.5 | Complete | tests/test_macho_parser.py |
 | TP1.2 | Write tests for load commands parsing | P1.2 | Pending | - |
 | TP1.3 | Write tests for segments and sections parsing | P1.3 | Pending | - |
 | TP1.4 | Write tests for fat binary handling | P1.4 | Pending | - |
