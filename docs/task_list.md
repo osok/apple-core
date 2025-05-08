@@ -21,7 +21,7 @@ This document tracks all development tasks for the Apple-Core Mach-O analyzer pr
 | TS1.2 | Write tests for database schema validation | S1.3 | Complete | tests/test_db_schema.py |
 | C1 | **Checkpoint: Project Foundation** | S1.1, S1.2, S1.3, S1.4, S1.5, TS1.1, TS1.2 | Complete | - |
 | **P1** | **Mach-O Parser Core** | | | |
-| P1.1 | Implement Mach-O header parser (32-bit and 64-bit formats) | C1 | In Progress | Design.md: Header structures |
+| P1.1 | Implement Mach-O header parser (32-bit and 64-bit formats) | C1 | Pending | Design.md: Header structures |
 | P1.2 | Implement load commands parser | C1 | Pending | Design.md: Load commands |
 | P1.3 | Implement segments and sections parser | C1 | Pending | Design.md: Segments and sections |
 | P1.4 | Implement fat/universal binary support | C1 | Pending | Design.md: Core structure |
