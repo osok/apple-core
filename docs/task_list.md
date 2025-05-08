@@ -32,14 +32,14 @@ This document tracks all development tasks for the Apple-Core Mach-O analyzer pr
 | TP1.4 | Write tests for fat binary handling | P1.4 | Complete | tests/test_fat_binary.py |
 | C2 | **Checkpoint: Mach-O Parser Core** | P1.1, P1.2, P1.3, P1.4, P1.5, TP1.1, TP1.2, TP1.3, TP1.4 | Complete | - |
 | **A1** | **Data Analysis Module** | | | |
-| A1.1 | Implement file metadata extraction and storage | C2 | Pending | Design.md: SQLite schema |
-| A1.2 | Implement symbol table parsing and analysis | C2 | Pending | Design.md: Load commands |
-| A1.3 | Implement cross-reference identification | C2 | Pending | Design.md: Analyzer Module |
-| A1.4 | Create data visualization preparation service | C2 | Pending | Design.md: Analyzer Module |
-| TA1.1 | Write tests for metadata extraction | A1.1 | Pending | - |
-| TA1.2 | Write tests for symbol table analysis | A1.2 | Pending | - |
-| TA1.3 | Write tests for cross-reference identification | A1.3 | Pending | - |
-| C3 | **Checkpoint: Analysis Core** | A1.1, A1.2, A1.3, A1.4, TA1.1, TA1.2, TA1.3 | Pending | - |
+| A1.1 | Implement file metadata extraction and storage | C2 | Complete | Design.md: SQLite schema |
+| A1.2 | Implement symbol table parsing and analysis | C2 | Complete | Design.md: Load commands |
+| A1.3 | Implement cross-reference identification | C2 | Complete | Design.md: Analyzer Module |
+| A1.4 | Create data visualization preparation service | C2 | Complete | Design.md: Analyzer Module |
+| TA1.1 | Write tests for metadata extraction | A1.1 | Complete | tests/test_analyzer_metadata.py |
+| TA1.2 | Write tests for symbol table analysis | A1.2 | Complete | tests/test_analyzer_symbols.py |
+| TA1.3 | Write tests for cross-reference identification | A1.3 | Complete | tests/test_analyzer_xrefs.py |
+| C3 | **Checkpoint: Analysis Core** | A1.1, A1.2, A1.3, A1.4, TA1.1, TA1.2, TA1.3 | Complete | - |
 | **D1** | **Disassembly Integration** | | | |
 | D1.1 | Integrate Capstone library | C3 | Pending | Design.md: Disassembly integration |
 | D1.2 | Implement architecture detection and disassembler selection | C3 | Pending | Design.md: Disassembly integration |
